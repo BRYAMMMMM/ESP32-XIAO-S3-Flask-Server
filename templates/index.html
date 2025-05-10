@@ -1,32 +1,212 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-     <meta charset="UTF-8">
-     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-     <style>
-          .container{
-               margin: 0;
-               padding: 0;
-               width: 100%;
-               height: 100vh;
-               background-color: #f1f1bc;
-               color: black;
-               text-align: center;
-          }
-          .containerHeader{
-               display: flex;
-               flex-direction: column;
-               align-items: center;
-          }
-     </style>
-     <title>Videostreaming ESP32-CAM</title>
+    <meta charset="UTF-8">
+    <title>Videostreaming ESP32-CAM</title>
+    <style>
+        body {
+            background-color: #f1f1bc;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+
+        .containerHeader {
+            margin-top: 20px;
+        }
+
+        .containerHeader h1 {
+            font-size: 2.5rem;
+            color: #333;
+        }
+
+        .buttons {
+            margin-top: 20px;
+        }
+
+        .buttons button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            border: none;
+            background-color: #ccc059;
+            color: #222;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+
+        .buttons button:hover {
+            background-color: #aaa044;
+            transform: scale(1.05);
+        }
+
+        .sliders {
+            margin: 20px auto;
+            width: 60%;
+            background-color: #fff9d2;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 8px #999;
+            display: none;
+        }
+
+        .sliders label {
+            display: block;
+            margin: 10px 0 5px;
+            font-weight: bold;
+        }
+
+        .sliders input[type=range] {
+            width: 100%;
+        }
+
+        .panel-ruido-tipo {
+            margin: 10px auto;
+            width: 60%;
+            background-color: #fff7d5;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 0 6px #aaa;
+            display: none;
+        }
+
+        .bitwise-panel {
+            margin: 20px auto;
+            width: 60%;
+            background-color: #fff6a0;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 0 8px #999;
+            display: none;
+        }
+
+        .stream {
+            width: 80vw;
+            margin-top: 20px;
+            border: 3px solid #444;
+            border-radius: 8px;
+        }
+
+        .header-img {
+            width: 50%;
+            max-width: 600px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px #888;
+        }
+    </style>
 </head>
-<body class = "container">
-     <div class="containerHeader">
-          <h1>Video Streaming</h1>
-          <img src="{{ url_for('static', filename='Header.webp') }}" alt="Image header" width="50%">
-     </div>
-     <img src="{{ url_for('video_stream') }}">
-</body>
-</html>
+<body>
+
+    <div class="containerHeader">
+        <h1>Video Streaming ESP32-CAM</h1>
+        <img src="{{ url_for('static', filename='Header.webp') }}" class="header-img" alt="Header ESP32">
+    </div>
+
+    <div class="buttons">
+        <button onclick="cambiarModo('normal')">Modo Normal</button>
+        <button onclick="cambiarModo('motion')">Movimiento + FPS</button>
+        <button onclick="cambiarModo('filters')">Filtros de Mejora</button>
+        <button onclick="cambiarModo('bitwise')">Solo Movimiento (Bitwise)</button>
+        <button onclick="cambiarModo('ruido')">Ruido</button>
+        <button onclick="cambiarModo('suavizados')"> Filtros de Suavizado</button>
+        <button onclick="cambiarModo('bordes')"> Bordes</button>
+    </div>
+
+    <div class="sliders" id="panelSliders">
+        <label for="media">Media (Gaussiano): <span id="mediaValue">0</span></label>
+        <input type="range" id="media" min="-50" max="50" value="0" step="1">
+
+        <label for="desviacion">Desviación estándar: <span id="desviacionValue">10</span></label>
+        <input type="range" id="desviacion" min="1" max="100" value="10" step="1">
+
+        <label for="varianza">Varianza (Speckle): <span id="varianzaValue">0.01</span></label>
+        <input type="range" id="varianza" min="0.0" max="0.5" step="0.01" value="0.01">
+
+        <label for="kernel">Tamaño de kernel: <span id="kernelValue">3</span></label>
+        <input type="range" id="kernel" min="3" max="15" value="3" step="2">
+    </div>
+
+    <div class="panel-ruido-tipo" id="panelRuidoTipo">
+        <label for="ruido_select">Tipo de Ruido para Suavizado:</label>
+        <select id="ruido_select">
+            <option value="gaussiano">Gaussiano</option>
+            <option value="speckle">Speckle</option>
+        </select>
+    </div>
+
+    <div class="bitwise-panel" id="panelBitwise">
+        <label for="bitwise_op">Operación Bitwise:</label>
+        <select id="bitwise_op">
+            <option value="and">AND</option>
+            <option value="or">OR</option>
+            <option value="xor">XOR</option>
+        </select>
+    </div>
+
+    <img id="video" class="stream" src="/video_feed" alt="Video Stream">
+
+<script>
+    const panelSliders = document.getElementById('panelSliders');
+    const panelBitwise = document.getElementById('panelBitwise');
+    const bitwiseSelect = document.getElementById('bitwise_op');
+    const panelRuidoTipo = document.getElementById('panelRuidoTipo');
+    const ruidoSelect = document.getElementById('ruido_select');
+
+    function cambiarModo(modo) {
+        fetch('/set_mode/' + modo);
+        document.getElementById("video").src = "/video_feed?t=" + new Date().getTime(); // evitar caché
+
+        panelSliders.style.display = ['ruido', 'suavizados', 'bordes'].includes(modo) ? 'block' : 'none';
+        panelRuidoTipo.style.display = (modo === 'suavizados') ? 'block' : 'none';
+        panelBitwise.style.display = (modo === 'bitwise') ? 'block' : 'none';
+    }
+
+    // Sliders
+    const sliders = ['media', 'desviacion', 'varianza', 'kernel'];
+    sliders.forEach(id => {
+        const slider = document.getElementById(id);
+        const valueLabel = document.getElementById(id + 'Value');
+        slider.addEventListener('input', () => {
+            valueLabel.textContent = slider.value;
+            enviarParametros();
+        });
+    });
+
+    function enviarParametros() {
+        const data = {
+            media: parseFloat(document.getElementById('media').value),
+            desviacion: parseFloat(document.getElementById('desviacion').value),
+            varianza: parseFloat(document.getElementById('varianza').value),
+            kernel_size: parseInt(document.getElementById('kernel').value)
+        };
+        fetch('/set_noise_params', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+    }
+
+    // Bitwise
+    bitwiseSelect.addEventListener('change', () => {
+        const selectedOp = bitwiseSelect.value;
+        fetch('/set_bitwise_op', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ operation: selectedOp })
+        });
+    });
+
+    
+    ruidoSelect.addEventListener('change', () => {
+        const selectedTipo = ruidoSelect.value;
+        fetch('/set_suavizado_ruido', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ruido: selectedTipo })  
+        });
+    });
+</script>
+
