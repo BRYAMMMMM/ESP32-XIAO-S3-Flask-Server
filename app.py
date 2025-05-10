@@ -166,7 +166,7 @@ def procesar_frame(frame):
 
 
     elif modo_actual == 'suavizados':
-        # 1 Agregar ruido según selección
+    # 1️ Generar imagen ruidosa según selección
         if ruido_para_suavizado == 'gaussiano':
             ruido = np.random.normal(media, desviacion, frame.shape).astype(np.int16)
             noisy = np.clip(frame.astype(np.int16) + ruido, 0, 255).astype(np.uint8)
@@ -177,20 +177,52 @@ def procesar_frame(frame):
             noisy = np.clip(speckle, 0, 255).astype(np.uint8)
             label = "Ruido Speckle"
 
-        # 2 Aplicar filtros sobre la imagen ruidosa
+    # 2️ Aplicar filtros
         blurred = cv2.blur(noisy, (kernel_size, kernel_size))
         median = cv2.medianBlur(noisy, kernel_size)
         gaussian = cv2.GaussianBlur(noisy, (kernel_size, kernel_size), 0)
 
-        # 3️Etiquetas
+    # 3️ Crear máscara de alta variación
+        diff = cv2.absdiff(noisy, frame)
+        diff_gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+        _, mask = cv2.threshold(diff_gray, 30, 255, cv2.THRESH_BINARY)
+
+    # 4️ Aplicar bitwise_and
+        result_blur = cv2.bitwise_and(blurred, blurred, mask=mask)
+        result_median = cv2.bitwise_and(median, median, mask=mask)
+        result_gaussian = cv2.bitwise_and(gaussian, gaussian, mask=mask)
+
+    # 5️ Etiquetas
         cv2.putText(noisy, label, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
         cv2.putText(blurred, "Blur", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
         cv2.putText(median, "Mediana", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
         cv2.putText(gaussian, "Gaussiano", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
 
-        fila1 = np.hstack((noisy, blurred))
-        fila2 = np.hstack((median, gaussian))
-        return np.vstack((fila1, fila2))
+        cv2.putText(result_blur, "Resultado Blur", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 255, 255), 2)
+        cv2.putText(result_median, "Resultado Mediana", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        cv2.putText(result_gaussian, "Resultado Gaussiano", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 200, 255), 2)
+
+    # 6️ Crear fila superior e inferior
+        fila1 = np.hstack((noisy, blurred, median, gaussian))
+        fila2 = np.hstack((noisy, result_blur, result_median, result_gaussian))
+
+    # 7️ Línea separadora con mensaje
+        separador = np.full((60, fila1.shape[1], 3), (30, 30, 30), dtype=np.uint8)
+
+        texto = " Comparacion usando bitwise_and (no existe copyTo en OpenCV para Python)"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.8
+        thickness = 2
+
+        (text_width, _), _ = cv2.getTextSize(texto, font, font_scale, thickness)
+        x_text = max((fila1.shape[1] - text_width) // 2, 10)
+
+        cv2.putText(separador, texto, (x_text + 2, 38), font, font_scale, (0, 0, 0), 4, cv2.LINE_AA)
+        cv2.putText(separador, texto, (x_text, 36), font, font_scale, (255, 255, 255), 2, cv2.LINE_AA)
+
+
+        return np.vstack((fila1, separador, fila2))
+
 
     elif modo_actual == 'ruido':
         original = frame.copy()
@@ -251,7 +283,7 @@ def procesar_frame(frame):
 
 
 
-    return frame   # Convertir la máscara a color para aplicar operaciones bitwise entre dos imágenes del mismo tipo
+    return frame  
    
 
 def video_generator():
